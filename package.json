@@ -1,0 +1,77 @@
+{
+  "name": "economos",
+  "version": "1.0.0",
+  "description": "A desktop multi-clipboard manager",
+  "main": "main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "clipboard",
+    "manager",
+    "desktop"
+  ],
+  "author": {
+    "name": "Economos",
+    "email": "economos@example.com"
+  },
+  "license": "MIT",
+  "build": {
+    "appId": "com.economos.clipboard",
+    "productName": "Economos",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "renderer.js",
+      "styles.css",
+      "crypto-utils.js",
+      "app-detector.js",
+      "ai-service.js",
+      "key-simulator.js",
+      "chat-assistant.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "maintainer": "economos@example.com"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "robotjs": "^0.6.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "node-abi": "^4.17.0"
+  }
+}

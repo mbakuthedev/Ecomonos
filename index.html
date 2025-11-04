@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Economos - Clipboard History</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h2> Clipboard History</h2>
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Active</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="ai-btn" id="aiBtn" title="AI Features">🤖</button>
+                <button class="private-btn" id="privateBtn" title="Toggle private mode">
+                    <span id="privateIcon">🔒</span>
+                </button>
+                <button class="toggle-btn" id="toggleBtn" title="Toggle monitoring">
+                    <span id="toggleIcon">⏸</span>
+                </button>
+                <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+                <button class="close-btn" id="closeBtn">×</button>
+            </div>
+        </div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search history...">
+            <button class="ai-search-btn" id="aiSearchBtn" title="AI Semantic Search">🧠</button>
+        </div>
+        <div class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="settings-header">
+                <h3>Privacy Settings</h3>
+                <button class="close-settings-btn" id="closeSettingsBtn">×</button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="encryptionToggle">
+                        <span>Enable Encryption</span>
+                    </label>
+                    <p class="setting-desc">Encrypt clipboard history on disk</p>
+                </div>
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="inMemoryToggle">
+                        <span>In-Memory Only</span>
+                    </label>
+                    <p class="setting-desc">Don't save history to disk (cleared on exit)</p>
+                </div>
+                <div class="setting-item">
+                    <label>Excluded Apps:</label>
+                    <div class="excluded-apps-list" id="excludedAppsList"></div>
+                    <input type="text" id="addAppInput" placeholder="Enter app name (e.g., Chrome)">
+                    <button class="add-app-btn" id="addAppBtn">Add</button>
+                </div>
+                <div class="settings-divider"></div>
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="aiEnabledToggle">
+                        <span>Enable AI Features</span>
+                    </label>
+                    <p class="setting-desc">Requires Groq or OpenAI API key (Groq is primary, OpenAI is fallback)</p>
+                </div>
+                <div class="setting-item" id="aiSettingsSection" style="display: none;">
+                    <label>Groq API Key (Primary):</label>
+                    <input type="password" id="groqApiKeyInput" placeholder="gsk_...">
+                    <p class="setting-desc">Your Groq API key is stored locally and encrypted (fast, free tier available)</p>
+                    <label style="margin-top: 12px;">OpenAI API Key (Fallback):</label>
+                    <input type="password" id="openaiApiKeyInput" placeholder="sk-...">
+                    <p class="setting-desc">OpenAI API key (optional, used when Groq fails or for embeddings)</p>
+                    <label style="margin-top: 12px;">
+                        <input type="checkbox" id="autoCategorizeToggle">
+                        <span>Auto-categorize clipboard items</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="ai-panel" id="aiPanel" style="display: none;">
+            <div class="ai-header">
+                <h3>AI Features</h3>
+                <button class="close-ai-btn" id="closeAiBtn">×</button>
+            </div>
+            <div class="ai-tabs">
+                <button class="ai-tab active" data-tab="smart-paste">Smart Paste</button>
+                <button class="ai-tab" data-tab="formatter">Formatter</button>
+                <button class="ai-tab" data-tab="reply">Reply Generator</button>
+                <button class="ai-tab" data-tab="chat-assistant">Chat Assistant</button>
+            </div>
+            <div class="ai-content">
+                <div class="ai-tab-content active" id="smart-paste-tab">
+                    <div class="ai-feature">
+                        <label>Text to clean/format:</label>
+                        <textarea id="smartPasteInput" rows="4" placeholder="Paste text here..."></textarea>
+                        <div class="smart-paste-options">
+                            <label><input type="checkbox" id="removeLineBreaks"> Remove line breaks</label>
+                            <label><input type="checkbox" id="formatJSON"> Format JSON</label>
+                            <label><input type="checkbox" id="rewriteTone"> Rewrite tone</label>
+                            <select id="toneSelect" style="display: none;">
+                                <option>professional</option>
+                                <option>casual</option>
+                                <option>formal</option>
+                                <option>friendly</option>
+                            </select>
+                        </div>
+                        <button class="ai-action-btn" id="smartPasteBtn">Process & Copy</button>
+                        <textarea id="smartPasteOutput" rows="4" readonly placeholder="Result will appear here..."></textarea>
+                    </div>
+                </div>
+                <div class="ai-tab-content" id="formatter-tab">
+                    <div class="ai-feature">
+                        <label>Text to format:</label>
+                        <textarea id="formatterInput" rows="4" placeholder="Paste text here..."></textarea>
+                        <label>Format as:</label>
+                        <select id="formatTypeSelect">
+                            <option value="html-to-markdown">HTML → Markdown</option>
+                            <option value="markdown-to-html">Markdown → HTML</option>
+                            <option value="json-format">Format JSON</option>
+                            <option value="code-format">Format Code</option>
+                            <option value="remove-formatting">Remove Formatting</option>
+                            <option value="capitalize">Capitalize</option>
+                        </select>
+                        <button class="ai-action-btn" id="formatterBtn">Format & Copy</button>
+                        <textarea id="formatterOutput" rows="4" readonly placeholder="Result will appear here..."></textarea>
+                    </div>
+                </div>
+                <div class="ai-tab-content" id="reply-tab">
+                    <div class="ai-feature">
+                        <label>Messages (one per line or paste multiple):</label>
+                        <textarea id="replyInput" rows="6" placeholder="Paste messages here, one per line..."></textarea>
+                        <label>Context (optional):</label>
+                        <input type="text" id="replyContext" placeholder="e.g., 'Customer support response'">
+                        <button class="ai-action-btn" id="replyBtn">Generate Reply</button>
+                        <textarea id="replyOutput" rows="4" readonly placeholder="Generated reply will appear here..."></textarea>
+                    </div>
+                </div>
+                <div class="ai-tab-content" id="chat-assistant-tab">
+                    <div class="ai-feature">
+                        <label>
+                            <input type="checkbox" id="chatAssistantToggle">
+                            <span>Enable Chat Assistant</span>
+                        </label>
+                        <p class="setting-desc">Automatically generate replies when new messages are detected in watched apps</p>
+                        
+                        <div id="chatAssistantSettings" style="display: none; margin-top: 16px;">
+                            <label>
+                                <input type="checkbox" id="autoSendToggle">
+                                <span>Auto-send replies</span>
+                            </label>
+                            <p class="setting-desc">Automatically paste and send replies (otherwise just copy to clipboard)</p>
+                            
+                            <label style="margin-top: 12px; display: block;">Watched Apps:</label>
+                            <div class="watched-apps-list" id="watchedAppsList"></div>
+                            <input type="text" id="addWatchedAppInput" placeholder="Enter app name (e.g., Messages, WhatsApp)">
+                            <button class="add-app-btn" id="addWatchedAppBtn" style="margin-top: 8px;">Add App</button>
+                            
+                            <div class="chat-activity" id="chatActivity" style="margin-top: 16px;">
+                                <label>Recent Activity:</label>
+                                <div class="chat-log" id="chatLog"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="history-list" id="historyList">
+            <div class="empty-state">No clipboard history yet</div>
+        </div>
+        <div class="footer">
+            <span class="hint">Press number key to paste • Esc to close</span>
+        </div>
+    </div>
+    <script src="renderer.js"></script>
+</body>
+</html>

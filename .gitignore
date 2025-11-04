@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+*.log
+clipboard-history.json
+dist/
+build/
+*.dmg
+*.zip
+*.exe
+*.AppImage
+*.deb
+*.rpm
