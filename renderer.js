@@ -65,6 +65,158 @@ document.getElementById('closeBtn').addEventListener('click', () => {
   ipcRenderer.send('close-window');
 });
 
+// Logs button
+document.getElementById('logsBtn').addEventListener('click', async () => {
+  const panel = document.getElementById('logsPanel');
+  const isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  
+  if (!isVisible) {
+    await loadLogs();
+    await loadLogFiles();
+  }
+});
+
+document.getElementById('closeLogsBtn').addEventListener('click', () => {
+  document.getElementById('logsPanel').style.display = 'none';
+});
+
+// Log viewer functionality
+async function loadLogs() {
+  const errorOnly = document.getElementById('errorOnlyToggle').checked;
+  const lines = parseInt(document.getElementById('logLinesSelect').value);
+  const selectedFile = document.getElementById('logFileSelect').value;
+  
+  try {
+    let result;
+    if (selectedFile === 'current') {
+      result = await ipcRenderer.invoke('get-logs', lines, errorOnly);
+    } else {
+      result = await ipcRenderer.invoke('read-log-file', selectedFile, lines);
+    }
+    
+    displayLogs(result.logs, result);
+  } catch (error) {
+    console.error('Error loading logs:', error);
+    document.getElementById('logsOutput').textContent = `Error loading logs: ${error.message}`;
+  }
+}
+
+function displayLogs(logs, info) {
+  const output = document.getElementById('logsOutput');
+  const infoDiv = document.getElementById('logsInfo');
+  
+  if (!info) {
+    info = { totalLines: logs.length, showingLines: logs.length };
+  }
+  
+  // Update info
+  if (info.error) {
+    infoDiv.textContent = `Error: ${info.error}`;
+  } else {
+    infoDiv.textContent = `Showing ${info.showingLines || logs.length} of ${info.totalLines || logs.length} lines${info.path ? ` • ${info.path.split(/[/\\]/).pop()}` : ''}`;
+  }
+  
+  if (logs.length === 0) {
+    output.innerHTML = '<div style="color: #888; text-align: center; padding: 20px;">No log entries found</div>';
+    return;
+  }
+  
+  // Parse and format log lines
+  const formattedLogs = logs.map(line => {
+    // Parse log line: [timestamp] [LEVEL] message
+    const match = line.match(/^\[([^\]]+)\] \[([^\]]+)\]\s*(.+)$/);
+    if (match) {
+      const [, timestamp, level, message] = match;
+      const levelLower = level.toLowerCase();
+      return `<div class="log-line ${levelLower}">
+        <span class="log-line-timestamp">${escapeHtml(timestamp)}</span>
+        <span class="log-line-level ${level}">[${level}]</span>
+        <span class="log-line-message">${escapeHtml(message)}</span>
+      </div>`;
+    } else {
+      return `<div class="log-line">${escapeHtml(line)}</div>`;
+    }
+  }).join('');
+  
+  output.innerHTML = formattedLogs;
+  output.scrollTop = output.scrollHeight; // Scroll to bottom
+}
+
+async function loadLogFiles() {
+  try {
+    const files = await ipcRenderer.invoke('get-all-log-files');
+    const select = document.getElementById('logFileSelect');
+    
+    // Keep "Current Log" option
+    const currentOption = select.options[0];
+    select.innerHTML = '';
+    select.appendChild(currentOption);
+    
+    // Add log files
+    files.forEach(file => {
+      const option = document.createElement('option');
+      option.value = file.path;
+      const sizeKB = (file.size / 1024).toFixed(1);
+      option.textContent = `${file.name} (${sizeKB} KB)`;
+      select.appendChild(option);
+    });
+    
+    // Select current log if no file selected
+    if (files.length > 0 && select.value === 'current') {
+      select.selectedIndex = 0;
+    }
+  } catch (error) {
+    console.error('Error loading log files:', error);
+  }
+}
+
+document.getElementById('refreshLogsBtn').addEventListener('click', async () => {
+  await loadLogs();
+});
+
+document.getElementById('errorOnlyToggle').addEventListener('change', async () => {
+  await loadLogs();
+});
+
+document.getElementById('logLinesSelect').addEventListener('change', async () => {
+  await loadLogs();
+});
+
+document.getElementById('logFileSelect').addEventListener('change', async () => {
+  await loadLogs();
+});
+
+document.getElementById('openLogsDirBtn').addEventListener('click', async () => {
+  try {
+    const result = await ipcRenderer.invoke('open-log-directory');
+    if (!result.success) {
+      alert('Error opening log directory: ' + result.error);
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+});
+
+document.getElementById('clearOldLogsBtn').addEventListener('click', async () => {
+  if (!confirm('Delete log files older than 7 days?')) {
+    return;
+  }
+  
+  try {
+    const result = await ipcRenderer.invoke('clear-old-logs', 7);
+    if (result.error) {
+      alert('Error clearing logs: ' + result.error);
+    } else {
+      alert(`Cleared ${result.deleted} old log file(s)`);
+      await loadLogFiles();
+      await loadLogs();
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+});
+
 // Toggle monitoring button
 document.getElementById('toggleBtn').addEventListener('click', () => {
   ipcRenderer.send('toggle-monitoring');

@@ -83,7 +83,8 @@ body {
 .private-btn,
 .settings-btn,
 .toggle-btn,
-.ai-btn {
+.ai-btn,
+.logs-btn {
     background: transparent;
     border: 1px solid #3a3a3a;
     color: #a0a0a0;
@@ -101,7 +102,8 @@ body {
 .private-btn:hover,
 .settings-btn:hover,
 .toggle-btn:hover,
-.ai-btn:hover {
+.ai-btn:hover,
+.logs-btn:hover {
     background: #3a3a3a;
     color: #e0e0e0;
     border-color: #4a4a4a;
@@ -725,3 +727,200 @@ body {
     color: #888;
     margin-top: 4px;
 }
+
+/* Logs Panel Styles */
+.logs-panel {
+    background: #1e1e1e;
+    border-bottom: 1px solid #3a3a3a;
+    padding: 16px 20px;
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+.logs-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.logs-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.logs-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #a0a0a0;
+}
+
+.logs-controls select,
+.logs-controls button {
+    padding: 6px 12px;
+    background: #252525;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.logs-controls select:hover,
+.logs-controls button:hover {
+    background: #2d2d2d;
+    border-color: #4a4a4a;
+}
+
+.logs-controls button {
+    background: #4a9eff;
+    border-color: #4a9eff;
+    color: white;
+}
+
+.logs-controls button:hover {
+    background: #5aaeff;
+    border-color: #5aaeff;
+}
+
+.close-logs-btn {
+    background: transparent;
+    border: none;
+    color: #a0a0a0;
+    font-size: 20px;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.close-logs-btn:hover {
+    background: #3a3a3a;
+    color: #e0e0e0;
+}
+
+.logs-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+}
+
+.log-file-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.log-file-selector label {
+    font-size: 12px;
+    color: #a0a0a0;
+}
+
+.log-file-selector select {
+    flex: 1;
+    padding: 6px 12px;
+    background: #252525;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.logs-info {
+    font-size: 11px;
+    color: #888;
+    padding: 8px;
+    background: #252525;
+    border-radius: 4px;
+}
+
+.logs-output {
+    background: #1a1a1a;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #e0e0e0;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.logs-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.logs-output::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+.logs-output::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+
+.logs-output::-webkit-scrollbar-thumb:hover {
+    background: #5a5a5a;
+}
+
+.log-line {
+    margin-bottom: 4px;
+    padding: 2px 0;
+}
+
+.log-line.debug {
+    color: #888;
+}
+
+.log-line.info {
+    color: #e0e0e0;
+}
+
+.log-line.warn {
+    color: #ff9800;
+}
+
+.log-line.error,
+.log-line.critical {
+    color: #ff4444;
+    font-weight: 500;
+}
+
+.log-line-timestamp {
+    color: #666;
+    margin-right: 8px;
+}
+
+.log-line-level {
+    margin-right: 8px;
+    font-weight: 600;
+}
+
+.log-line-level.DEBUG { color: #888; }
+.log-line-level.INFO { color: #4a9eff; }
+.log-line-level.WARN { color: #ff9800; }
+.log-line-level.ERROR { color: #ff4444; }
+.log-line-level.CRITICAL { color: #ff0000; }

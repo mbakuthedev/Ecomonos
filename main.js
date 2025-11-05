@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, clipboard, globalShortcut, Tray, Menu, nativeImage, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { getEncryptionKey, encrypt, decrypt } = require('./crypto-utils');
@@ -6,6 +6,7 @@ const { getActiveApp } = require('./app-detector');
 const aiService = require('./ai-service');
 const { simulatePaste } = require('./key-simulator');
 const chatAssistant = require('./chat-assistant');
+const logger = require('./logger');
 
 let mainWindow = null;
 let tray = null;
@@ -41,7 +42,7 @@ function loadSettings() {
       isPrivateMode = settings.privateMode || false;
     }
   } catch (error) {
-    console.error('Error loading settings:', error);
+    logger.error('Error loading settings', error);
   }
 }
 
@@ -50,8 +51,9 @@ function saveSettings() {
   try {
     settings.privateMode = isPrivateMode;
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    logger.debug('Settings saved');
   } catch (error) {
-    console.error('Error saving settings:', error);
+    logger.error('Error saving settings', error);
   }
 }
 
@@ -80,9 +82,10 @@ async function loadHistory() {
 
     if (data) {
       clipboardHistory = JSON.parse(data);
+      logger.debug('History loaded', { count: clipboardHistory.length });
     }
   } catch (error) {
-    console.error('Error loading history:', error);
+    logger.error('Error loading history', error);
     clipboardHistory = [];
   }
 }
@@ -113,8 +116,9 @@ async function saveHistory() {
         fs.unlinkSync(ENCRYPTED_HISTORY_FILE);
       }
     }
+    logger.debug('History saved', { count: clipboardHistory.length });
   } catch (error) {
-    console.error('Error saving history:', error);
+    logger.error('Error saving history', error);
   }
 }
 
@@ -162,7 +166,7 @@ async function addToHistory(text) {
       }
       newItem.category = await aiService.categorizeText(text);
     } catch (error) {
-      console.error('Error categorizing:', error);
+      logger.warn('Error categorizing text', error);
       // Use fallback categorization
       if (text.includes('@') && text.includes('.')) newItem.category = 'email';
       else if (text.startsWith('http://') || text.startsWith('https://')) newItem.category = 'link';
@@ -392,8 +396,36 @@ function showWindow() {
   mainWindow.focus();
 }
 
+// Setup crash handlers
+function setupCrashHandlers() {
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.critical('Uncaught Exception', error);
+    dialog.showErrorBox('Application Error', `An unexpected error occurred:\n\n${error.message}\n\nCheck logs for details.`);
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.critical('Unhandled Promise Rejection', { reason, promise });
+  });
+
+  // Handle renderer process crashes
+  app.on('render-process-gone', (event, webContents, details) => {
+    logger.critical('Render Process Crashed', details);
+    dialog.showErrorBox('Renderer Crashed', `The renderer process crashed:\n\n${details.reason}\n\nCheck logs for details.`);
+  });
+
+  // Handle main process window crashes
+  app.on('child-process-gone', (event, details) => {
+    logger.error('Child Process Gone', details);
+  });
+}
+
 // App lifecycle
 app.whenReady().then(async () => {
+  setupCrashHandlers();
+  logger.info('Economos starting');
+  
   loadSettings();
   await loadHistory();
   createTray();
@@ -408,7 +440,11 @@ app.whenReady().then(async () => {
   // Start monitoring clipboard
   startMonitoring();
   
-  console.log(`Economos started. Press ${shortcut} to open history.`);
+  logger.info(`Economos started. Press ${shortcut} to open history.`, {
+    platform: process.platform,
+    version: app.getVersion(),
+    userData: app.getPath('userData')
+  });
 });
 
 app.on('will-quit', () => {
@@ -433,8 +469,9 @@ ipcMain.on('paste-item', async (event, text) => {
   setTimeout(() => {
     try {
       simulatePaste();
+      logger.debug('Pasted item', { textLength: text.length });
     } catch (error) {
-      console.error('Failed to simulate paste:', error);
+      logger.error('Failed to simulate paste', error);
       // User can still manually paste with Cmd/Ctrl+V
     }
   }, 200);
@@ -458,6 +495,7 @@ ipcMain.on('update-history', async (event, newHistory) => {
 ipcMain.on('delete-item', async (event, itemId) => {
   clipboardHistory = clipboardHistory.filter(item => item.id !== itemId);
   await saveHistory();
+  logger.debug('Item deleted from history', { itemId });
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('history-updated', clipboardHistory);
   }
@@ -679,6 +717,58 @@ ipcMain.on('remove-watched-app', async (event, appName) => {
 
 ipcMain.on('get-watched-apps', (event) => {
   event.returnValue = chatAssistant.getWatchedApps();
+});
+
+// Log viewer IPC handlers
+ipcMain.handle('get-logs', async (event, lines = 500, errorOnly = false) => {
+  try {
+    return logger.readLogs(lines, errorOnly);
+  } catch (error) {
+    logger.error('Error getting logs', error);
+    return { logs: [], error: error.message };
+  }
+});
+
+ipcMain.handle('get-all-log-files', async () => {
+  try {
+    return logger.getAllLogFiles();
+  } catch (error) {
+    logger.error('Error getting log files', error);
+    return [];
+  }
+});
+
+ipcMain.handle('read-log-file', async (event, filePath, lines = 500) => {
+  try {
+    return logger.readLogFile(filePath, lines);
+  } catch (error) {
+    logger.error('Error reading log file', error);
+    return { logs: [], error: error.message };
+  }
+});
+
+ipcMain.handle('get-log-directory', () => {
+  return logger.getLogDirectory();
+});
+
+ipcMain.handle('open-log-directory', () => {
+  try {
+    const logDir = logger.getLogDirectory();
+    shell.openPath(logDir);
+    return { success: true, path: logDir };
+  } catch (error) {
+    logger.error('Error opening log directory', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('clear-old-logs', async (event, daysToKeep = 7) => {
+  try {
+    return logger.clearOldLogs(daysToKeep);
+  } catch (error) {
+    logger.error('Error clearing old logs', error);
+    return { deleted: 0, error: error.message };
+  }
 });
 
 ipcMain.handle('send-chat-reply', async (event, reply, appName) => {

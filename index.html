@@ -17,6 +17,7 @@
                 </div>
             </div>
             <div class="header-right">
+                <button class="logs-btn" id="logsBtn" title="View Logs">📋</button>
                 <button class="ai-btn" id="aiBtn" title="AI Features">🤖</button>
                 <button class="private-btn" id="privateBtn" title="Toggle private mode">
                     <span id="privateIcon">🔒</span>
@@ -172,6 +173,36 @@
         </div>
         <div class="footer">
             <span class="hint">Press number key to paste • Esc to close</span>
+        </div>
+        <div class="logs-panel" id="logsPanel" style="display: none;">
+            <div class="logs-header">
+                <h3>Application Logs</h3>
+                <div class="logs-controls">
+                    <label>
+                        <input type="checkbox" id="errorOnlyToggle"> Errors Only
+                    </label>
+                    <select id="logLinesSelect">
+                        <option value="100">Last 100 lines</option>
+                        <option value="500" selected>Last 500 lines</option>
+                        <option value="1000">Last 1000 lines</option>
+                        <option value="5000">Last 5000 lines</option>
+                    </select>
+                    <button class="refresh-logs-btn" id="refreshLogsBtn">Refresh</button>
+                    <button class="open-logs-dir-btn" id="openLogsDirBtn">Open Folder</button>
+                    <button class="clear-old-logs-btn" id="clearOldLogsBtn">Clear Old</button>
+                </div>
+                <button class="close-logs-btn" id="closeLogsBtn">×</button>
+            </div>
+            <div class="logs-content">
+                <div class="log-file-selector">
+                    <label>Log File:</label>
+                    <select id="logFileSelect">
+                        <option value="current">Current Log</option>
+                    </select>
+                </div>
+                <div class="logs-info" id="logsInfo"></div>
+                <div class="logs-output" id="logsOutput"></div>
+            </div>
         </div>
     </div>
     <script src="renderer.js"></script>
