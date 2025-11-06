@@ -59,6 +59,15 @@
                     <input type="text" id="addAppInput" placeholder="Enter app name (e.g., Chrome)">
                     <button class="add-app-btn" id="addAppBtn">Add</button>
                 </div>
+                <div class="setting-item">
+                    <label>Auto-Delete Old Items:</label>
+                    <select id="retentionDaysSelect">
+                        <option value="0">Keep Forever</option>
+                        <option value="3">3 Days</option>
+                        <option value="7">7 Days</option>
+                    </select>
+                    <p class="setting-desc">Automatically delete clipboard items older than the selected period</p>
+                </div>
                 <div class="settings-divider"></div>
                 <div class="setting-item">
                     <label>
@@ -194,11 +203,40 @@
                 <button class="close-logs-btn" id="closeLogsBtn">×</button>
             </div>
             <div class="logs-content">
+                <div class="log-insights-panel" id="logInsightsPanel">
+                    <div class="insights-header">
+                        <h4>📊 Log Insights</h4>
+                        <button class="toggle-insights-btn" id="toggleInsightsBtn">−</button>
+                    </div>
+                    <div class="insights-content" id="insightsContent">
+                        <div class="insight-stats">
+                            <div class="insight-stat">
+                                <span class="stat-label">Total Logs:</span>
+                                <span class="stat-value" id="statTotal">-</span>
+                            </div>
+                            <div class="insight-stat">
+                                <span class="stat-label">Errors:</span>
+                                <span class="stat-value error" id="statErrors">-</span>
+                            </div>
+                            <div class="insight-stat">
+                                <span class="stat-label">Warnings:</span>
+                                <span class="stat-value warning" id="statWarnings">-</span>
+                            </div>
+                            <div class="insight-stat">
+                                <span class="stat-label">Last 24h:</span>
+                                <span class="stat-value" id="statLast24h">-</span>
+                            </div>
+                        </div>
+                        <div class="insight-alerts" id="insightAlerts"></div>
+                        <div class="insight-patterns" id="insightPatterns"></div>
+                    </div>
+                </div>
                 <div class="log-file-selector">
                     <label>Log File:</label>
                     <select id="logFileSelect">
                         <option value="current">Current Log</option>
                     </select>
+                    <input type="text" id="logSearchInput" placeholder="Search logs..." style="flex: 1; margin-left: 8px;">
                 </div>
                 <div class="logs-info" id="logsInfo"></div>
                 <div class="logs-output" id="logsOutput"></div>

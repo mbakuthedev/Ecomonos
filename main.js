@@ -230,6 +230,7 @@ async function addToHistory(text) {
   };
   
   // Auto-categorize if enabled and AI is configured
+  // Skip AI categorization for very large texts (use fallback)
   if (settings.autoCategorize && settings.aiEnabled && (settings.openaiApiKey || settings.groqApiKey)) {
     try {
       if (settings.openaiApiKey) {
@@ -238,27 +239,16 @@ async function addToHistory(text) {
       if (settings.groqApiKey) {
         aiService.setGroqKey(settings.groqApiKey);
       }
+      // categorizeText will handle size limits and use fallback if needed
       newItem.category = await aiService.categorizeText(text);
     } catch (error) {
-      logger.warn('Error categorizing text', error);
-      // Use fallback categorization
-      if (text.includes('@') && text.includes('.')) newItem.category = 'email';
-      else if (text.startsWith('http://') || text.startsWith('https://')) newItem.category = 'link';
-      else if (/^[0-9]+$/.test(text.trim())) newItem.category = 'number';
-      else if (text.includes('{') || text.includes('[')) newItem.category = 'json';
-      else if (text.includes('<') && text.includes('>')) newItem.category = 'html';
-      else if (text.includes('function') || text.includes('const ')) newItem.category = 'code';
-      else newItem.category = 'note';
+      logger.warn('Error categorizing text, using fallback', error.message);
+      // Use fallback categorization (no AI needed)
+      newItem.category = aiService.fallbackCategorize(text);
     }
   } else {
-    // Basic fallback categorization
-    if (text.includes('@') && text.includes('.')) newItem.category = 'email';
-    else if (text.startsWith('http://') || text.startsWith('https://')) newItem.category = 'link';
-    else if (/^[0-9]+$/.test(text.trim())) newItem.category = 'number';
-    else if (text.includes('{') || text.includes('[')) newItem.category = 'json';
-    else if (text.includes('<') && text.includes('>')) newItem.category = 'html';
-    else if (text.includes('function') || text.includes('const ')) newItem.category = 'code';
-    else newItem.category = 'note';
+    // Basic fallback categorization (no AI needed)
+    newItem.category = aiService.fallbackCategorize(text);
   }
   
   // Add to beginning of array
@@ -571,9 +561,6 @@ function setupCrashHandlers() {
 app.whenReady().then(async () => {
   try {
     setupCrashHandlers();
-    
-    // Initialize file paths first
-    initializeFilePaths();
     
     logger.info('Economos starting', {
       platform: process.platform,

@@ -130,27 +130,28 @@ class ChatAssistant {
 
   // Handle new message detected
   async handleNewMessage(appName, message, activeApp) {
-    console.log(`New message detected in ${appName}:`, message.substring(0, 100));
-    
-    // Generate AI reply
-    try {
-      const reply = await this.generateReply(message, appName);
-      
-      // Notify callbacks
-      for (const callback of this.messageCallbacks) {
-        callback({
-          app: appName,
-          message: message,
-          reply: reply,
-          activeApp: activeApp
-        });
-      }
-      
-      return reply;
-    } catch (error) {
-      console.error('Error generating reply:', error);
+    // Skip very large messages (likely documents, not chat messages)
+    if (message && message.length > 10000) {
+      console.log(`Skipping large message in ${appName} (${message.length} chars)`);
       return null;
     }
+    
+    console.log(`New message detected in ${appName}:`, message.substring(0, 100));
+    
+    // Generate AI reply (will return null if too large or on error)
+    const reply = await this.generateReply(message, appName);
+    
+    // Notify callbacks even if reply is null (so UI can show message was detected)
+    for (const callback of this.messageCallbacks) {
+      callback({
+        app: appName,
+        message: message,
+        reply: reply, // May be null if AI processing skipped
+        activeApp: activeApp
+      });
+    }
+    
+    return reply;
   }
 
   // Generate AI reply for a message
@@ -159,18 +160,31 @@ class ChatAssistant {
       throw new Error('AI service not initialized');
     }
     
+    // Check if message is too large
+    if (message && message.length > 8000) {
+      console.log('Message too large for AI reply, skipping');
+      return null; // Skip AI processing for very large messages
+    }
+    
     try {
-      // Use the existing AI service
-      const prompt = `You are a helpful assistant. Respond to this message in a natural, conversational way. Keep the response concise and appropriate.${context ? ` Context: ${context}` : ''}\n\nMessage: ${message}\n\nReply:`;
+      // Limit message size before sending
+      const maxMessageLength = 5000; // Limit individual message length
+      const limitedMessage = message.length > maxMessageLength 
+        ? message.substring(0, maxMessageLength) + '...'
+        : message;
       
-      const reply = await aiService.chatCompletion([
-        { role: 'user', content: prompt }
-      ], null, 'groq'); // Use Groq first, will fallback to OpenAI
+      // Use the existing AI service (it will handle further limits)
+      const reply = await aiService.generateReply(limitedMessage, context);
       
-      return reply.trim();
+      return reply ? reply.trim() : null;
     } catch (error) {
+      // If error is due to size or rate limit, don't throw - just skip
+      if (error.message.includes('too large') || error.message.includes('TPM') || error.message.includes('Requested')) {
+        console.error('Error generating reply (message too large or rate limited):', error.message);
+        return null; // Return null instead of throwing
+      }
       console.error('Error in generateReply:', error);
-      throw error;
+      return null; // Return null on error instead of throwing
     }
   }
 
