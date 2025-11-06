@@ -14,6 +14,7 @@ let clipboardHistory = [];
 let isMonitoring = true;
 let isPrivateMode = false;
 let monitoringInterval = null;
+let cleanupInterval = null;
 let settings = {
   encryptionEnabled: true,
   inMemoryOnly: false,
@@ -25,7 +26,8 @@ let settings = {
   autoCategorize: false,
   chatAssistantEnabled: false,
   watchedApps: [],
-  autoSendReplies: false
+  autoSendReplies: false,
+  retentionDays: 0 // 0 = forever, 3 = 3 days, 7 = 7 days
 };
 
 const MAX_HISTORY = 100;
@@ -83,6 +85,8 @@ async function loadHistory() {
     if (data) {
       clipboardHistory = JSON.parse(data);
       logger.debug('History loaded', { count: clipboardHistory.length });
+      // Clean up old items on load
+      cleanupOldItems();
     }
   } catch (error) {
     logger.error('Error loading history', error);
@@ -119,6 +123,76 @@ async function saveHistory() {
     logger.debug('History saved', { count: clipboardHistory.length });
   } catch (error) {
     logger.error('Error saving history', error);
+  }
+}
+
+// Clean up old clipboard items based on retention settings
+async function cleanupOldItems() {
+  const retentionDays = settings.retentionDays || 0;
+  
+  // If retention is 0 (forever), don't clean up
+  if (retentionDays === 0) {
+    return;
+  }
+  
+  const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+  const initialCount = clipboardHistory.length;
+  
+  clipboardHistory = clipboardHistory.filter(item => {
+    // Keep items that are newer than cutoff time
+    return item.timestamp >= cutoffTime;
+  });
+  
+  const removedCount = initialCount - clipboardHistory.length;
+  
+  if (removedCount > 0) {
+    logger.info(`Cleaned up ${removedCount} old clipboard items`, { 
+      retentionDays, 
+      remaining: clipboardHistory.length 
+    });
+    await saveHistory();
+    
+    // Update window if it exists
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('history-updated', clipboardHistory);
+    }
+  }
+}
+
+// Start periodic cleanup (runs every hour)
+function startCleanupService() {
+  // Clear existing interval if any
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+  
+  // Run cleanup immediately
+  cleanupOldItems().catch(err => {
+    logger.error('Error in initial cleanup', err);
+  });
+  
+  // Only start interval if retention is enabled (not forever)
+  if (settings.retentionDays && settings.retentionDays > 0) {
+    // Then run cleanup every hour (3600000 ms)
+    cleanupInterval = setInterval(() => {
+      cleanupOldItems().catch(err => {
+        logger.error('Error in periodic cleanup', err);
+      });
+    }, 3600000); // 1 hour
+    
+    logger.debug('Cleanup service started', { retentionDays: settings.retentionDays });
+  } else {
+    logger.debug('Cleanup service disabled (keep forever)', { retentionDays: settings.retentionDays });
+  }
+}
+
+// Stop periodic cleanup
+function stopCleanupService() {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+    logger.debug('Cleanup service stopped');
   }
 }
 
@@ -190,7 +264,10 @@ async function addToHistory(text) {
   // Add to beginning of array
   clipboardHistory.unshift(newItem);
   
-  // Limit history size
+  // Clean up old items before checking size limit
+  await cleanupOldItems();
+  
+  // Limit history size (after cleanup)
   if (clipboardHistory.length > MAX_HISTORY) {
     clipboardHistory = clipboardHistory.slice(0, MAX_HISTORY);
   }
@@ -311,16 +388,85 @@ function updateTrayMenu() {
   tray.setToolTip(`Economos - Multi-Clipboard Manager (${status})`);
 }
 
+// Create a simple fallback icon
+function createFallbackIcon() {
+  // Create a simple 16x16 icon using a data URI (clipboard icon)
+  // Using a simple colored square as fallback
+  const size = process.platform === 'win32' ? 16 : 22;
+  const icon = nativeImage.createEmpty();
+  
+  // For Windows, try to create a simple bitmap
+  // If that fails, we'll use the empty icon (which should still work)
+  return icon;
+}
+
 // Create system tray
 function createTray() {
-  const icon = nativeImage.createEmpty();
-  tray = new Tray(icon);
-  
-  updateTrayMenu();
-  
-  tray.on('click', () => {
-    showWindow();
-  });
+  try {
+    let icon = null;
+    
+    // Try multiple icon paths (for development and packaged app)
+    const possibleIconPaths = [
+      path.join(__dirname, 'build', 'icon.png'),
+      path.join(__dirname, 'build', 'icon.ico'),
+      path.join(process.resourcesPath, 'build', 'icon.png'),
+      path.join(process.resourcesPath, 'build', 'icon.ico'),
+      path.join(app.getAppPath(), 'build', 'icon.png'),
+      path.join(app.getAppPath(), 'build', 'icon.ico')
+    ];
+    
+    // Try to load icon from any of the possible paths
+    for (const iconPath of possibleIconPaths) {
+      try {
+        if (fs.existsSync(iconPath)) {
+          icon = nativeImage.createFromPath(iconPath);
+          if (!icon.isEmpty()) {
+            // Resize for tray (16x16 or 22x22 depending on platform)
+            const size = process.platform === 'win32' ? 16 : 22;
+            icon = icon.resize({ width: size, height: size });
+            logger.debug('Loaded tray icon from', iconPath);
+            break;
+          }
+        }
+      } catch (error) {
+        // Continue trying other paths
+        continue;
+      }
+    }
+    
+    // If no icon loaded, create a fallback
+    if (!icon || icon.isEmpty()) {
+      logger.warn('Could not load tray icon from any path, using fallback');
+      icon = createFallbackIcon();
+    }
+    
+    // Create tray with icon (empty icon should still work on Windows)
+    tray = new Tray(icon);
+    
+    // Windows: Set tooltip immediately (before menu)
+    if (process.platform === 'win32') {
+      tray.setToolTip('Economos - Multi-Clipboard Manager');
+    }
+    
+    updateTrayMenu();
+    
+    // Windows: Use click event, macOS/Linux: use click for left, right-click for menu
+    if (process.platform === 'win32') {
+      tray.on('click', () => {
+        showWindow();
+      });
+    } else {
+      tray.on('click', () => {
+        showWindow();
+      });
+    }
+    
+    logger.debug('System tray created successfully');
+  } catch (error) {
+    logger.error('Failed to create system tray', error);
+    // Don't crash the app if tray creation fails
+    // The app can still work without tray icon (though less convenient)
+  }
 }
 
 // Create main window
@@ -423,32 +569,108 @@ function setupCrashHandlers() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  setupCrashHandlers();
-  logger.info('Economos starting');
-  
-  loadSettings();
-  await loadHistory();
-  createTray();
-  createWindow();
-  
-  // Register global shortcut (Cmd+Shift+V on macOS, Ctrl+Shift+V on Windows/Linux)
-  const shortcut = process.platform === 'darwin' ? 'CommandOrControl+Shift+V' : 'Control+Shift+V';
-  globalShortcut.register(shortcut, () => {
-    showWindow();
-  });
-  
-  // Start monitoring clipboard
-  startMonitoring();
-  
-  logger.info(`Economos started. Press ${shortcut} to open history.`, {
-    platform: process.platform,
-    version: app.getVersion(),
-    userData: app.getPath('userData')
-  });
+  try {
+    setupCrashHandlers();
+    
+    // Initialize file paths first
+    initializeFilePaths();
+    
+    logger.info('Economos starting', {
+      platform: process.platform,
+      version: app.getVersion(),
+      electronVersion: process.versions.electron,
+      nodeVersion: process.versions.node,
+      userData: app.getPath('userData')
+    });
+    
+    // Load settings and history
+    try {
+      loadSettings();
+    } catch (error) {
+      logger.error('Failed to load settings', error);
+    }
+    
+    try {
+      await loadHistory();
+    } catch (error) {
+      logger.error('Failed to load history', error);
+      clipboardHistory = []; // Start with empty history
+    }
+    
+    // Create tray (non-critical, continue if it fails)
+    try {
+      createTray();
+    } catch (error) {
+      logger.error('Failed to create tray, continuing without tray icon', error);
+    }
+    
+    // Create window (must succeed for app to work)
+    try {
+      createWindow();
+      // Show window on first start (Windows users might not see tray icon)
+      if (process.platform === 'win32') {
+        // On Windows, show window briefly on first start to indicate app is running
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.hide();
+          }
+        }, 2000);
+      }
+    } catch (error) {
+      logger.critical('Failed to create window', error);
+      dialog.showErrorBox('Startup Error', `Failed to create application window:\n\n${error.message}\n\nCheck logs for details.`);
+      app.quit();
+      return;
+    }
+    
+    // Register global shortcut
+    try {
+      const shortcut = process.platform === 'darwin' ? 'CommandOrControl+Shift+V' : 'Control+Shift+V';
+      const registered = globalShortcut.register(shortcut, () => {
+        showWindow();
+      });
+      
+      if (!registered) {
+        logger.warn(`Failed to register global shortcut: ${shortcut}`);
+      } else {
+        logger.info(`Global shortcut registered: ${shortcut}`);
+      }
+    } catch (error) {
+      logger.error('Failed to register global shortcut', error);
+      // Continue without global shortcut - user can still use tray menu
+    }
+    
+    // Start monitoring clipboard
+    try {
+      startMonitoring();
+    } catch (error) {
+      logger.error('Failed to start clipboard monitoring', error);
+      // Continue without monitoring - user can start it manually
+    }
+    
+    // Start cleanup service
+    try {
+      startCleanupService();
+    } catch (error) {
+      logger.error('Failed to start cleanup service', error);
+      // Non-critical, continue
+    }
+    
+    logger.info('Economos started successfully', {
+      platform: process.platform,
+      version: app.getVersion(),
+      userData: app.getPath('userData')
+    });
+  } catch (error) {
+    logger.critical('Fatal error during startup', error);
+    dialog.showErrorBox('Fatal Error', `Application failed to start:\n\n${error.message}\n\nCheck logs for details.`);
+    app.quit();
+  }
 });
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  stopCleanupService();
 });
 
 app.on('window-all-closed', (e) => {
@@ -524,6 +746,12 @@ ipcMain.on('get-settings', (event) => {
 ipcMain.on('update-settings', async (event, newSettings) => {
   settings = { ...settings, ...newSettings };
   saveSettings();
+  
+  // If retention days changed, restart cleanup service
+  if (newSettings.retentionDays !== undefined) {
+    startCleanupService();
+    // Clean up immediately when setting changes (already called in startCleanupService, but ensure it runs)
+  }
   
   // If switching to/from in-memory mode or encryption, reload history
   if (newSettings.inMemoryOnly !== undefined || newSettings.encryptionEnabled !== undefined) {
@@ -768,6 +996,15 @@ ipcMain.handle('clear-old-logs', async (event, daysToKeep = 7) => {
   } catch (error) {
     logger.error('Error clearing old logs', error);
     return { deleted: 0, error: error.message };
+  }
+});
+
+ipcMain.handle('analyze-logs', async (event, filePath = null) => {
+  try {
+    return logger.analyzeLogs(filePath);
+  } catch (error) {
+    logger.error('Error analyzing logs', error);
+    return logger.getEmptyInsights();
   }
 });
 

@@ -16,7 +16,8 @@ let settings = {
   autoCategorize: false,
   chatAssistantEnabled: false,
   watchedApps: [],
-  autoSendReplies: false
+  autoSendReplies: false,
+  retentionDays: 0
 };
 let isAiSearchMode = false;
 let chatLog = [];
@@ -65,20 +66,42 @@ document.getElementById('closeBtn').addEventListener('click', () => {
   ipcRenderer.send('close-window');
 });
 
+// Panel management - ensure only one panel is open at a time
+function closeAllPanels() {
+  document.getElementById('settingsPanel').style.display = 'none';
+  document.getElementById('aiPanel').style.display = 'none';
+  document.getElementById('logsPanel').style.display = 'none';
+  document.getElementById('aiBtn').classList.remove('active');
+  document.getElementById('aiSearchBtn').classList.remove('active');
+  isAiSearchMode = false;
+}
+
+function openPanel(panelId, buttonId = null) {
+  closeAllPanels();
+  const panel = document.getElementById(panelId);
+  panel.style.display = 'block';
+  if (buttonId) {
+    document.getElementById(buttonId).classList.add('active');
+  }
+}
+
 // Logs button
 document.getElementById('logsBtn').addEventListener('click', async () => {
   const panel = document.getElementById('logsPanel');
   const isVisible = panel.style.display !== 'none';
-  panel.style.display = isVisible ? 'none' : 'block';
   
-  if (!isVisible) {
+  if (isVisible) {
+    closeAllPanels();
+  } else {
+    openPanel('logsPanel');
     await loadLogs();
     await loadLogFiles();
+    await loadLogInsights(); // Load intelligent insights
   }
 });
 
 document.getElementById('closeLogsBtn').addEventListener('click', () => {
-  document.getElementById('logsPanel').style.display = 'none';
+  closeAllPanels();
 });
 
 // Log viewer functionality
@@ -110,11 +133,16 @@ function displayLogs(logs, info) {
     info = { totalLines: logs.length, showingLines: logs.length };
   }
   
+  // Store logs for search
+  allLogs = logs;
+  
   // Update info
   if (info.error) {
     infoDiv.textContent = `Error: ${info.error}`;
   } else {
-    infoDiv.textContent = `Showing ${info.showingLines || logs.length} of ${info.totalLines || logs.length} lines${info.path ? ` • ${info.path.split(/[/\\]/).pop()}` : ''}`;
+    const searchTerm = document.getElementById('logSearchInput').value;
+    const searchInfo = searchTerm ? ` (filtered from ${info.totalLines || logs.length})` : '';
+    infoDiv.textContent = `Showing ${info.showingLines || logs.length} of ${info.totalLines || logs.length} lines${searchInfo}${info.path ? ` • ${info.path.split(/[/\\]/).pop()}` : ''}`;
   }
   
   if (logs.length === 0) {
@@ -123,24 +151,42 @@ function displayLogs(logs, info) {
   }
   
   // Parse and format log lines
+  const searchTerm = document.getElementById('logSearchInput').value.toLowerCase();
   const formattedLogs = logs.map(line => {
     // Parse log line: [timestamp] [LEVEL] message
     const match = line.match(/^\[([^\]]+)\] \[([^\]]+)\]\s*(.+)$/);
     if (match) {
       const [, timestamp, level, message] = match;
       const levelLower = level.toLowerCase();
+      let highlightedMessage = escapeHtml(message);
+      
+      // Highlight search term
+      if (searchTerm) {
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
+        highlightedMessage = highlightedMessage.replace(regex, '<mark>$1</mark>');
+      }
+      
       return `<div class="log-line ${levelLower}">
         <span class="log-line-timestamp">${escapeHtml(timestamp)}</span>
         <span class="log-line-level ${level}">[${level}]</span>
-        <span class="log-line-message">${escapeHtml(message)}</span>
+        <span class="log-line-message">${highlightedMessage}</span>
       </div>`;
     } else {
-      return `<div class="log-line">${escapeHtml(line)}</div>`;
+      let highlightedLine = escapeHtml(line);
+      if (searchTerm) {
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
+        highlightedLine = highlightedLine.replace(regex, '<mark>$1</mark>');
+      }
+      return `<div class="log-line">${highlightedLine}</div>`;
     }
   }).join('');
   
   output.innerHTML = formattedLogs;
   output.scrollTop = output.scrollHeight; // Scroll to bottom
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function loadLogFiles() {
@@ -185,6 +231,8 @@ document.getElementById('logLinesSelect').addEventListener('change', async () =>
 
 document.getElementById('logFileSelect').addEventListener('change', async () => {
   await loadLogs();
+  await loadLogInsights();
+  document.getElementById('logSearchInput').value = ''; // Clear search when changing files
 });
 
 document.getElementById('openLogsDirBtn').addEventListener('click', async () => {
@@ -211,11 +259,114 @@ document.getElementById('clearOldLogsBtn').addEventListener('click', async () =>
       alert(`Cleared ${result.deleted} old log file(s)`);
       await loadLogFiles();
       await loadLogs();
+      await loadLogInsights();
     }
   } catch (error) {
     alert('Error: ' + error.message);
   }
 });
+
+// Toggle insights panel
+document.getElementById('toggleInsightsBtn').addEventListener('click', () => {
+  const content = document.getElementById('insightsContent');
+  const btn = document.getElementById('toggleInsightsBtn');
+  const isVisible = content.style.display !== 'none';
+  
+  if (isVisible) {
+    content.style.display = 'none';
+    btn.textContent = '+';
+  } else {
+    content.style.display = 'block';
+    btn.textContent = '−';
+    loadLogInsights();
+  }
+});
+
+// Load log insights
+async function loadLogInsights() {
+  try {
+    const selectedFile = document.getElementById('logFileSelect').value;
+    const filePath = selectedFile === 'current' ? null : selectedFile;
+    
+    const insights = await ipcRenderer.invoke('analyze-logs', filePath);
+    displayLogInsights(insights);
+  } catch (error) {
+    console.error('Error loading log insights:', error);
+  }
+}
+
+function displayLogInsights(insights) {
+  // Update statistics
+  document.getElementById('statTotal').textContent = insights.stats.total.toLocaleString();
+  document.getElementById('statErrors').textContent = insights.stats.error;
+  document.getElementById('statWarnings').textContent = insights.stats.warn;
+  document.getElementById('statLast24h').textContent = insights.stats.last24h;
+  
+  // Display alerts
+  const alertsDiv = document.getElementById('insightAlerts');
+  if (insights.alerts.length === 0) {
+    alertsDiv.innerHTML = '<div class="insight-alert info">✓ No issues detected</div>';
+  } else {
+    alertsDiv.innerHTML = insights.alerts.map(alert => `
+      <div class="insight-alert ${alert.severity}">
+        <div class="alert-message">${escapeHtml(alert.message)}</div>
+        <div class="alert-suggestion">${escapeHtml(alert.suggestion)}</div>
+      </div>
+    `).join('');
+  }
+  
+  // Display patterns
+  const patternsDiv = document.getElementById('insightPatterns');
+  if (insights.patterns.length === 0 && insights.errorPatterns.length === 0) {
+    patternsDiv.innerHTML = '<div class="insight-pattern">No patterns detected</div>';
+  } else {
+    let html = '';
+    
+    if (insights.patterns.length > 0) {
+      html += insights.patterns.map(pattern => `
+        <div class="insight-pattern">
+          <span class="pattern-type">${escapeHtml(pattern.type.replace(/_/g, ' '))}</span>
+          <span class="pattern-message">${escapeHtml(pattern.message)}</span>
+          <span class="pattern-count">(${pattern.count})</span>
+        </div>
+      `).join('');
+    }
+    
+    if (insights.errorPatterns.length > 0) {
+      html += '<div class="insight-pattern-header">Top Error Patterns:</div>';
+      html += insights.errorPatterns.map(pattern => `
+        <div class="insight-pattern">
+          <span class="pattern-message">${escapeHtml(pattern.pattern.substring(0, 60))}${pattern.pattern.length > 60 ? '...' : ''}</span>
+          <span class="pattern-count error">×${pattern.count}</span>
+        </div>
+      `).join('');
+    }
+    
+    patternsDiv.innerHTML = html;
+  }
+}
+
+// Log search functionality
+let filteredLogs = [];
+let allLogs = [];
+
+document.getElementById('logSearchInput').addEventListener('input', (e) => {
+  const searchTerm = e.target.value.toLowerCase();
+  if (searchTerm === '') {
+    displayLogs(allLogs, { totalLines: allLogs.length, showingLines: allLogs.length });
+  } else {
+    filteredLogs = allLogs.filter(line => line.toLowerCase().includes(searchTerm));
+    displayLogs(filteredLogs, { totalLines: allLogs.length, showingLines: filteredLogs.length });
+  }
+});
+
+// Update loadLogs to store all logs
+const originalLoadLogs = loadLogs;
+loadLogs = async function() {
+  const result = await originalLoadLogs();
+  allLogs = result.logs || [];
+  return result;
+};
 
 // Toggle monitoring button
 document.getElementById('toggleBtn').addEventListener('click', () => {
@@ -231,11 +382,17 @@ document.getElementById('privateBtn').addEventListener('click', (e) => {
 // Settings button
 document.getElementById('settingsBtn').addEventListener('click', () => {
   const panel = document.getElementById('settingsPanel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  const isVisible = panel.style.display !== 'none';
+  
+  if (isVisible) {
+    closeAllPanels();
+  } else {
+    openPanel('settingsPanel');
+  }
 });
 
 document.getElementById('closeSettingsBtn').addEventListener('click', () => {
-  document.getElementById('settingsPanel').style.display = 'none';
+  closeAllPanels();
 });
 
 // Settings UI updates
@@ -246,6 +403,7 @@ function updateSettingsUI() {
   document.getElementById('openaiApiKeyInput').value = settings.openaiApiKey || '';
   document.getElementById('groqApiKeyInput').value = settings.groqApiKey || '';
   document.getElementById('autoCategorizeToggle').checked = settings.autoCategorize || false;
+  document.getElementById('retentionDaysSelect').value = settings.retentionDays || 0;
   
   // Chat Assistant settings
   document.getElementById('chatAssistantToggle').checked = settings.chatAssistantEnabled || false;
@@ -268,6 +426,12 @@ document.getElementById('encryptionToggle').addEventListener('change', (e) => {
 // In-memory toggle
 document.getElementById('inMemoryToggle').addEventListener('change', (e) => {
   ipcRenderer.send('update-settings', { inMemoryOnly: e.target.checked });
+});
+
+// Retention days setting
+document.getElementById('retentionDaysSelect').addEventListener('change', (e) => {
+  const retentionDays = parseInt(e.target.value);
+  ipcRenderer.send('update-settings', { retentionDays });
 });
 
 // Add excluded app
@@ -396,18 +560,21 @@ function updateChatLog() {
 document.getElementById('aiBtn').addEventListener('click', () => {
   const panel = document.getElementById('aiPanel');
   const isVisible = panel.style.display !== 'none';
-  panel.style.display = isVisible ? 'none' : 'block';
-  document.getElementById('aiBtn').classList.toggle('active', !isVisible);
   
-  if (!isVisible && !settings.aiEnabled) {
-    alert('Please enable AI features in Settings first and add your OpenAI API key.');
-    document.getElementById('settingsBtn').click();
+  if (isVisible) {
+    closeAllPanels();
+  } else {
+    if (!settings.aiEnabled) {
+      openPanel('settingsPanel');
+      alert('Please enable AI features in Settings first and add your API key.');
+      return;
+    }
+    openPanel('aiPanel', 'aiBtn');
   }
 });
 
 document.getElementById('closeAiBtn').addEventListener('click', () => {
-  document.getElementById('aiPanel').style.display = 'none';
-  document.getElementById('aiBtn').classList.remove('active');
+  closeAllPanels();
 });
 
 // AI Tabs
@@ -431,6 +598,12 @@ document.getElementById('aiSearchBtn').addEventListener('click', () => {
   isAiSearchMode = !isAiSearchMode;
   document.getElementById('aiSearchBtn').classList.toggle('active', isAiSearchMode);
   const searchInput = document.getElementById('searchInput');
+  
+  // Close other panels when toggling AI search
+  if (isAiSearchMode) {
+    closeAllPanels();
+  }
+  
   if (isAiSearchMode) {
     searchInput.placeholder = 'AI Semantic Search (by meaning)...';
     if (searchInput.value) {
@@ -780,11 +953,13 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
   
-  // Escape key
+  // Escape key - close panels first, then window
   if (e.key === 'Escape') {
-    const settingsPanel = document.getElementById('settingsPanel');
-    if (settingsPanel.style.display !== 'none') {
-      settingsPanel.style.display = 'none';
+    const hasOpenPanel = document.getElementById('settingsPanel').style.display !== 'none' ||
+                         document.getElementById('aiPanel').style.display !== 'none' ||
+                         document.getElementById('logsPanel').style.display !== 'none';
+    if (hasOpenPanel) {
+      closeAllPanels();
     } else {
       ipcRenderer.send('close-window');
     }

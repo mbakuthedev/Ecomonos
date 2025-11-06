@@ -62,20 +62,39 @@ AI automatically categorizes your clipboard items:
 
 ### Ready-to-Use Downloads
 
-**macOS (Apple Silicon - ARM64)**
-- [Download DMG Installer](dist/Economos-1.0.0-arm64.dmg) (89 MB)
-- [Download ZIP (Portable)](dist/Economos-1.0.0-arm64-mac.zip) (86 MB)
+**Download the latest release from [GitHub Releases](https://github.com/mbakuthedev/economos/releases/latest)**
 
-**macOS (Intel - x64)**
-- Build from source (see below) or download from releases
+The releases include pre-built installers for:
+- **macOS**: DMG installer (drag-and-drop installation)
+- **Windows**: Setup installer (.exe) - just double-click and install
+- **Linux**: AppImage (portable) and .deb (installer) packages
 
-**Windows**
-- Build from source (see below) or download from releases
-- Includes both installer (.exe) and portable (.zip) versions
+> **Note**: Replace `YOUR_USERNAME` with your actual GitHub username in the link above.
 
-**Linux**
-- Build from source (see below) or download from releases
-- Includes both AppImage (portable) and .deb (installer) packages
+### Easy Installation (No Commands Required!)
+
+**For Windows Users:**
+1. Download `Economos-1.0.0-setup.exe`
+2. Double-click to run
+3. Follow the installation wizard
+4. Click "Finish" - the app will launch automatically!
+
+**For macOS Users:**
+1. Download `Economos-1.0.0.dmg`
+2. Double-click to open
+3. Drag "Economos" to your Applications folder
+4. Open from Applications (may need to allow in System Preferences)
+
+**For Linux Users:**
+1. Download `Economos-1.0.0.AppImage`
+2. Right-click → Properties → Allow executing
+3. Double-click to run
+
+### Quick Install
+
+1. Go to the [Releases page](https://github.com/mbakuthedev/economos/releases)
+2. Download the appropriate file for your platform
+3. Follow the installation instructions below
 
 ### Installation Instructions
 

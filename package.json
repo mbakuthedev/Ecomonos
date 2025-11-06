@@ -10,7 +10,10 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "build:all": "npm run build:win && npm run build:mac && npm run build:linux",
+    "prebuild": "echo Building Economos installers...",
+    "postbuild": "echo Build complete! Check the dist/ folder for installers."
   },
   "keywords": [
     "clipboard",
@@ -26,8 +29,10 @@
     "appId": "com.economos.clipboard",
     "productName": "Economos",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
+    "icon": "build/icon",
     "files": [
       "main.js",
       "index.html",
@@ -39,7 +44,8 @@
       "key-simulator.js",
       "chat-assistant.js",
       "logger.js",
-      "package.json"
+      "package.json",
+      "build/**/*"
     ],
 
     "mac": {
@@ -47,13 +53,17 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "icon": "build/icon.icns"
     },
     "win": {
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "executableName": "Economos.exe"
     },
     "linux": {
       "target": [
@@ -61,11 +71,21 @@
         "deb"
       ],
       "category": "Utility",
-      "maintainer": "economos@example.com"
+      "maintainer": "favourdamilareadeogo@gmail.com",
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "runAfterFinish": true,
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Economos",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-${version}-setup.${ext}"
     }
   },
   "dependencies": {},
